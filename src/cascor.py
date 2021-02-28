@@ -24,7 +24,11 @@ from matplotlib import pyplot as plt
 from matplotlib import colors as mcolors
 from activation_functions import *
 
-
+"""
+1 - refazer inicializaçao dos pesos
+2 - refazer atualizaçao dos pesos
+3 - refazer treinamento
+"""
 np.set_printoptions()
 
 def add_bias(X):
@@ -45,6 +49,14 @@ def load_and_preprocess_data():
 														dataNY,
 														train_size = 0.8,
 														test_size  = 0.2)
+	
+
+	X_train = X_train.values
+	X_test  = X_test.values
+	# WE WILL USE ONLY THE FIRST COLUMN 														
+	y_train = y_train[y_train.columns[0]].values
+	y_test = y_test[y_test.columns[0]].values
+
 	# X_train = 1.0 * X_train / 255
 	# X_test = 1.0 * X_test / 255	
 
@@ -115,7 +127,7 @@ if __name__ == '__main__':
 	parser = argparse.ArgumentParser()
 
 	parser.add_argument('--learning-rate', type=float, dest='learning_rate', default=0.001)
-	parser.add_argument('--minibatch-size', type=int, dest='minibatch_size', default=1)
+	parser.add_argument('--minibatch-size', type=int, dest='minibatch_size', default=200)
 	parser.add_argument('--patience', type=float, dest='patience', default=0.0001)
 	parser.add_argument('--activation', type=str, dest='activation_func', default='sigmoid')
 	parser.add_argument('--time', type=str, dest='time', default='train')

@@ -1,5 +1,6 @@
 import numpy as np
 import pickle
+import sys, os
 from matplotlib import pyplot as plt
 from matplotlib import colors as mcolors
 from activation_functions import *
@@ -15,7 +16,7 @@ class CasCorNet(object):
 		self.O = output_size
 
 		# initialize the weights
-		self.weights = self.init_weights()
+		# self.weights = self.init_weights()
 
 		self.hidden_units = []
 
@@ -36,7 +37,7 @@ class CasCorNet(object):
 		self.loss_figure = plt.figure()
 		self.accuracy_figure = plt.figure()
 		self.cm_figure = plt.figure()
-		self.limit_points_xs = []
+		self.limit_points_X_train_local = []
 		self.limit_points_ys = []
 
 	def set_data(self, X_train, y_train, X_test, y_test):
@@ -46,24 +47,31 @@ class CasCorNet(object):
 		self.y_test = y_test
 
 	def init_weights(self):
-		val = 4 * np.sqrt(6 / (self.O + self.I))
+		val = 1
 		weights = np.random.uniform(-val, val, (self.O, self.I))
-		#print("weights")
+		print(self.O)
+		print(self.I)
+
+		print("weights")
+		exit("pesos")
 		#print(weights)
 		return weights
 
-	def accuracy(self, xs, ts):
-		_, ys = self.forward(xs)
-		acc = 1.0 * np.sum(np.argmax(ts, axis=1) == np.argmax(ys, axis=1)) / len(xs)
+	def accuracy(self, X_train_local, ts):
+		_, ys = self.forward(X_train_local)
+		acc = 1.0 * np.sum(np.argmax(ts, axis=1) == np.argmax(ys, axis=1)) / len(X_train_local)
 		return acc
 
-	def forward(self, xs):
-		hs = np.dot(xs, self.weights[:,:len(xs[0])].T)
+	def forward(self, X_train_local):
+		hs = np.dot(X_train_local, self.weights[:,:len(X_train_local[0])].T)
 		ys = self.f(hs)
+		print(X_train_local.shape)
+		exit("teste3")
+		print(ys.shape)
 
 		return hs, ys
 
-	def backward(self, xs, ts, ys):
+	def backward(self, X_train_local, ts, ys):
 
 		# initialize the gradient with zeros
 		dweights = np.zeros(self.weights.shape)
@@ -71,18 +79,21 @@ class CasCorNet(object):
 		# add the gradients for all examples
 		for i in range(len(ts)):
 			delta = -(ts[i] - ys[i]) * self.f(ys[i], True)
-			dweights += np.outer(delta, xs[i])
+			dweights += np.outer(delta, X_train_local[i])
 
 		# take the average of the gradients for all examples
 		dweights /= self.mb_sz
 
 		return dweights
 
-	def get_loss(self, ts, ys, return_sum):
+	def get_loss(self, mini_y_train_local, mini_ys, return_sum):
 		if return_sum == True:
-			return np.sum(0.5 * (ts - ys)**2) / len(ts)
+			print("teste 21")
+			print(mini_y_train_local.shape)
+			print(mini_ys.shape)
+			return np.sum(0.5 * (mini_y_train_local - mini_ys) ** 2) / len(mini_y_train_local)
 		else:
-			return 0.5 * (ts - ys)**2 / len(ts)
+			return 0.5 * (mini_y_train_local - mini_ys)**2 / len(mini_y_train_local)
 
 	def update_weights(self, dweights, loss):
 		self.weights -= self.alpha * dweights
@@ -108,7 +119,7 @@ class CasCorNet(object):
 		plt.ylabel('Loss')		
 		h1, = plt.plot(self.train_loss, color='red', label='Training loss')
 		h2, = plt.plot(np.arange(0, self.eval_every * len(self.test_loss), self.eval_every), self.test_loss, color='blue', label='Test loss')
-		plt.scatter(self.limit_points_xs, self.limit_points_ys, color='black', label='New hidden unit recruited')
+		plt.scatter(self.limit_points_X_train_local, self.limit_points_ys, color='black', label='New hidden unit recruited')
 		plt.legend(handles=[h1, h2])
 		plt.savefig('training_loss.png')
 		plt.clf()
@@ -136,19 +147,19 @@ class CasCorNet(object):
 			 abs(self.train_loss[-1] - self.train_loss[-2]) < self.eps:
 			self.converged = True
 
-	def eval_network(self, xs_test, ts_test, ts_idx_test):
+	def eval_network(self, X_test_local, ts_test, y_test_local):
 
 		print('learning rate', self.alpha)
 
 		for hidden_unit in self.hidden_units:
-			vs = hidden_unit.get_best_candidate_values(xs_test)
-			print('xs shape before', xs_test.shape)
-			xs_test = self.augment_input(xs_test, vs)
-			print('xs shape after', xs_test.shape)
+			vs = hidden_unit.get_best_candidate_values(X_test_local)
+			print('X_train_local shape before', X_test_local.shape)
+			X_test_local = self.augment_input(X_test_local, vs)
+			print('X_train_local shape after', X_test_local.shape)
 
 		self.hidden_units = []
 
-		hs, ys = self.forward(xs_test)
+		hs, ys = self.forward(X_test_local)
 		test_loss = self.get_loss(ts_test, ys, True)
 
 		# make predictions
@@ -156,12 +167,12 @@ class CasCorNet(object):
 
 		accuracy = 0.0
 		confusion_matrix = np.zeros((self.O, self.O))
-		for i in range(len(xs_test)):
-			confusion_matrix[ts_idx_test[i], predictions[i]] += 1.0
-			if ts_idx_test[i] == predictions[i]:
+		for i in range(len(X_test_local)):
+			confusion_matrix[y_test_local[i], predictions[i]] += 1.0
+			if y_test_local[i] == predictions[i]:
 				accuracy += 1
 
-		accuracy /= len(xs_test)
+		accuracy /= len(X_test_local)
 		print('Accuracy on test data: %.3f' % (accuracy))
 
 		plt.figure(self.cm_figure.number)
@@ -171,79 +182,83 @@ class CasCorNet(object):
 
 		self.plot_loss(test_loss, 'test')
 
-		return xs_test
+		return X_test_local
 
-	def train_io(self, xs, ts, xs_test, ts_test, ts_idx_test):
+	def train_io(self, X_train_local, X_test_local, y_test_local, y_train_local):
 
 		iteration = 0
 		
 		while not self.converged:
 
-			shuffled_range =list(range(len(xs)))
+			shuffled_range =list(range(len(X_train_local)))
 			# print(shuffled_range)
 			np.random.shuffle(shuffled_range)
 
 			total_loss = 0.0
 
 			# get minibatches of data			
-			for i in range(len(xs) // self.mb_sz):
+			for i in range(len(X_train_local) // self.mb_sz):
 
 				indices = shuffled_range[i * self.mb_sz:(i+1) * self.mb_sz]
-				mini_xs = xs[indices]
-				mini_ts = ts[indices]
+				# print(y_train_local.shape)
+				mini_X_train_local = X_train_local[indices]
+				# print(y_train_local.head())
+				mini_y_train_local = y_train_local[indices]
+				# sys.exit(-1)
 
 				# forward pass
-				mini_hs, mini_ys = self.forward(mini_xs)
-
+				mini_hs, mini_ys = self.forward(mini_X_train_local)
+				
 				# compute total loss on this minibatch
-				loss = self.get_loss(mini_ts, mini_ys, True)
+				loss = self.get_loss(mini_y_train_local, mini_ys, True)
+
 				total_loss += loss
 
 				# backward pass
-				dweights = self.backward(mini_xs, mini_ts, mini_ys)
+				dweights = self.backward(mini_X_train_local, mini_y_train_local, mini_ys)
 
 				# update the weights using delta rule
 				self.update_weights(dweights, loss)
 				
-			train_accuracy = self.accuracy(xs, ts)
-			test_accuracy = self.accuracy(xs_test, ts_test)
+			train_accuracy = self.accuracy(X_train_local, y_train_local)
+			test_accuracy = self.accuracy(X_test_local, y_test_local)
 
 			print('TRAIN ACC=', train_accuracy)
 			print('TEST ACC=', test_accuracy)
 			
-			self.plot_loss(total_loss / (len(xs) / self.mb_sz), 'train')
+			self.plot_loss(total_loss / (len(X_train_local) / self.mb_sz), 'train')
 			self.plot_accuracy(train_accuracy, test_accuracy)
 			self.check_io_convergence(iteration)
 
 
 			if (len(self.train_loss) - 1) % self.eval_every == 0:
-				xs_test = self.eval_network(xs_test, ts_test, ts_idx_test)
+				X_test_local = self.eval_network(X_test_local, ts_test, y_test_local)
 
 			iteration += 1
 
-		self.limit_points_xs.append(len(self.train_loss))
+		self.limit_points_X_train_local.append(len(self.train_loss))
 		self.limit_points_ys.append(self.train_loss[-1])
 
 		print('Input-output convergence after %d iterations' % iteration)
 
-		return xs_test
+		return X_test_local
 
 	def train(self):
 
-		xs = self.X_train
-		ts_idx = self.y_train
-		xs_test = self.X_test
-		ts_idx_test = self.y_test
+		X_train_local = self.X_train
+		y_train_local = self.y_train
+		X_test_local = self.X_test
+		y_test_local = self.y_test
 
-		N, M = len(xs), len(xs_test) 
-		print(ts_idx)
-		exit("teste")
+		N, M = len(X_train_local), len(X_test_local) 
+		# print(self.X_train.shape)
+		# sys.exit(-1)
 
 		# create target arrays with 1 for the correct class
 		# ts = np.zeros((N, self.O))
-		# ts[np.arange(N), ts_idx] = 1
+		# ts[np.arange(N), y_train_local] = 1
 		# ts_test = np.zeros((M, self.O))
-		# ts_test[np.arange(M), ts_idx_test] = 1
+		# ts_test[np.arange(M), y_test_local] = 1
 
 		iteration = 0
 		acceptable_loss = 0.01
@@ -256,11 +271,11 @@ class CasCorNet(object):
 			# train the input-output connections until convergence
 			self.converged = False
 
-			xs_test = self.train_io(xs, ts, xs_test, ts_test, ts_idx_test)
-			self.X_test = xs_test
+			X_test_local = self.train_io(X_train_local, X_test_local, y_test_local, y_train_local)
+			self.X_test = X_test_local
 
 			# measure loss on data and stop if it's acceptable
-			_, ys = self.forward(xs)
+			_, ys = self.forward(X_train_local)
 			losses = self.get_loss(ts, ys, False)
 
 			loss = np.sum(losses)
@@ -271,8 +286,8 @@ class CasCorNet(object):
 				break
 
 			# otherwise add a new hidden unit
-			xs = self.add_hidden_unit(xs, ts, losses)
-			self.X_train = xs
+			X_train_local = self.add_hidden_unit(X_train_local, ts, losses)
+			self.X_train = X_train_local
 
 			iteration += 1
 
@@ -280,20 +295,20 @@ class CasCorNet(object):
 				with open(self.output_file, 'wb') as f:
 					pickle.dump(self, f)
 
-	def augment_input(self, xs, vs):
-		new_xs = np.zeros((xs.shape[0], xs.shape[1] + 1))
-		new_xs[:, :-1] = xs
-		new_xs[:, -1] = vs
+	def augment_input(self, X_train_local, vs):
+		new_X_train_local = np.zeros((X_train_local.shape[0], X_train_local.shape[1] + 1))
+		new_X_train_local[:, :-1] = X_train_local
+		new_X_train_local[:, -1] = vs
 
-		return new_xs
+		return new_X_train_local
 
-	def add_hidden_unit(self, xs, ts, losses):
+	def add_hidden_unit(self, X_train_local, ts, losses):
 		
 		# initialize a pool of 10 candidates # TODO: make param instead of 10
 		candidates_pool = hiddenUnitsPool(self.I, self.O, 5)
-		candidates_pool.train(xs, losses)		
-		vs = candidates_pool.get_best_candidate_values(xs)
-		xs = self.augment_input(xs, vs)
+		candidates_pool.train(X_train_local, losses)		
+		vs = candidates_pool.get_best_candidate_values(X_train_local)
+		X_train_local = self.augment_input(X_train_local, vs)
 
 		self.hidden_units.append(candidates_pool)
 		self.I += 1 	# just added one more element for each input, so the size fo the input has increased
@@ -302,4 +317,4 @@ class CasCorNet(object):
 		new_weights[:, :-1] = self.weights
 		self.weights = new_weights
 
-		return xs
+		return X_train_local
